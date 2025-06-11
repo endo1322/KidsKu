@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SNS Checker</title>
+  <style>
+    body { font-family: sans-serif; width: 300px; padding: 10px; }
+    textarea { width: 100%; height: 100px; }
+    #result { margin-top: 10px; font-size: 0.9em; white-space: pre-wrap; }
+    button { margin-top: 10px; width: 100%; }
+  </style>
+</head>
+<body>
+  <h3>投稿文チェック</h3>
+  <textarea id="postText" placeholder="ここに投稿文を入力..."></textarea>
+  <button id="checkBtn">LLMでチェック</button>
+  <div id="result"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
