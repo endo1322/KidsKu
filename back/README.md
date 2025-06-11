@@ -41,6 +41,7 @@ If you want to enable LangSmith tracing, add your LangSmith API key to the `.env
 ```text
 # .env
 LANGSMITH_API_KEY=lsv2...
+OPENAI_API_KEY=...
 ```
 
 3. Start the LangGraph Server.
