@@ -2,24 +2,17 @@
 
 Returns a predefined response. Replace logic and configuration as needed.
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, TypedDict
 
-from langchain_core.runnables import RunnableConfig
-from langgraph.graph import StateGraph
-
-
-class Configuration(TypedDict):
-    """Configurable parameters for the agent.
-
-    Set these when creating assistants OR when invoking the graph.
-    See: https://langchain-ai.github.io/langgraph/cloud/how-tos/configuration_cloud/
-    """
-
-    my_configurable_param: str
+from dotenv import load_dotenv
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from langgraph.graph import END, StateGraph
+from pydantic import Field
 
 
 @dataclass
@@ -30,25 +23,45 @@ class State:
     See: https://langchain-ai.github.io/langgraph/concepts/low_level/#state
     """
 
-    changeme: str = "example"
+    user_request: str = Field(..., description="ユーザーからのリクエスト")
+    response: str = Field(default="", description="AIからのレスポンス")
 
 
-async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
+def call_model(state: State, llm: ChatOpenAI) -> Dict[str, Any]:
     """Process input and returns output.
 
     Can use runtime configuration to alter behavior.
     """
-    configuration = config["configurable"]
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "あなたはユーザーインタビュー用の多様なペルソナを作成する専門家です。",
+            ),
+            (
+                "human",
+                "ユーザーリクエスト: {user_request}\n\n",
+            ),
+        ]
+    )
+    model = llm
+    output_parser = StrOutputParser()
+    chain = prompt | model | output_parser
+    result = chain.invoke({"user_request": state.user_request})
     return {
-        "changeme": "output from call_model. "
-        f'Configured with {configuration.get("my_configurable_param")}'
+        "user_request": state.user_request,
+        "response": result
     }
 
+load_dotenv()
+
+llm = ChatOpenAI(model="gpt-4o", temperature=0.0)
 
 # Define the graph
 graph = (
     StateGraph(State, config_schema=Configuration)
-    .add_node(call_model)
+    .add_node("call_model", lambda state: call_model(state, llm))
     .add_edge("__start__", "call_model")
+    .add_edge("call_model", END)
     .compile(name="New Graph")
 )
