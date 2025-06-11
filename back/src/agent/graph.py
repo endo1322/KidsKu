@@ -59,7 +59,7 @@ llm = ChatOpenAI(model="gpt-4o", temperature=0.0)
 
 # Define the graph
 graph = (
-    StateGraph(State, config_schema=Configuration)
+    StateGraph(State)
     .add_node("call_model", lambda state: call_model(state, llm))
     .add_edge("__start__", "call_model")
     .add_edge("call_model", END)
