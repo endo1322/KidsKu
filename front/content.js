@@ -326,11 +326,14 @@ async function hookButton(selector) {
 
         const data = await response.json();
         const { level, corrected_text, reason, suggestion } = data.response;
-        resolveLoadingPopup(popup, "完了しました。", "sucess");
+        popup.remove(); //ポップアップの削除
         if (level !== 'safe') {
           showPopup(
-            `リスクのある内容です。投稿を見直してください。\n訂正案：${corrected_text}`,
+            `リスクのある内容です。投稿を見直してください。`,
             level
+          );
+          showPopup(
+            `訂正案：${corrected_text}`, "safe"
           );
         } else {
           showPopup("安全な内容です。投稿を続行します。", level);
