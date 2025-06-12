@@ -2,7 +2,7 @@
 const config = {
   API_URL: "http://127.0.0.1:2024",
   // バックエンド起動のたび変更してください
-  ASSISTANT_ID: "df58dbc4-98ec-489a-a650-d1a120093703"
+  ASSISTANT_ID: "30309d6a-673d-4f65-93bd-b14888cbaf74"
 };
 
 // 設定をストレージに保存
@@ -23,4 +23,3 @@ chrome.runtime.onInstalled.addListener(async () => {
     // スレッドIDをストレージに保存
     chrome.storage.local.set({ threadId });
   });
-  
