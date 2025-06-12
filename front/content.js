@@ -26,7 +26,7 @@ async function hookButton(selector) {
   if (!existing) {
     return;
   }
-  const { threadId } = await chrome.storage.local.get("threadId");
+  const { threadId, config } = await chrome.storage.local.get(["threadId", "config"]);
   if (existing && !existing.dataset.hooked) {
     existing.dataset.hooked = "true";
 
@@ -39,13 +39,13 @@ async function hookButton(selector) {
       const text = editor?.innerText || "";
 
       try {
-        const response = await fetch(`http://127.0.0.1:2024/threads/${threadId}/runs/wait`, {
+        const response = await fetch(`${config.API_URL}/threads/${threadId}/runs/wait`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            assistant_id: "c1ee8685-d317-4085-9bc9-11643e1e1df0",
+            assistant_id: config.ASSISTANT_ID,
             input: {
               user_request: text
             }
