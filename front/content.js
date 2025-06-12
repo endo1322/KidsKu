@@ -307,7 +307,7 @@ async function hookButton(selector) {
       const editor = document.querySelector('[data-testid="tweetTextarea_0"]');
       const text = editor?.innerText || "";
       
-      const popup = showLoadingPopup("AIが内容をチェック中...");
+      const popup = showLoadingPopup("AIが内容をチェックするね...");
       try {
         const response = await fetch(`${config.API_URL}/threads/${threadId}/runs/wait`, {
           method: "POST",
@@ -330,23 +330,28 @@ async function hookButton(selector) {
         const level = data.level;
         // 判断理由
         const reason = data.reason;
-        const res = data.response
+        const res = data?.response
         // 訂正文
-        const corrected_text = res.corrected_text;
+        const corrected_text = res?.corrected_text;
         // 投稿文におけるアドバイス
-        const suggestion = res.suggestion;
+        const suggestion = res?.suggestion;
 
         popup.remove(); //ポップアップの削除
-        if (level !== 'safe') {
+        if (level === 'warning') {
           showPopup(
-            `リスクのある内容です。投稿を見直してください。`,
+            `この投稿、本当に大丈夫かな？\nこう直すともっとよくなるかも!`,
             level
           );
           showPopup(
-            `訂正案：${corrected_text}`, "safe"
+            `訂正文: ${corrected_text}`, "safe"
+          );
+        } else if (level === 'danger') {
+          showPopup(
+            `この投稿、あとで後悔しないかな？\nいったん落ち着いて考えてみよう`,
+            level
           );
         } else {
-          showPopup("安全な内容です。投稿を続行します。", level);
+          showPopup("いい内容だね！投稿するね！", level);
 
           const tweetButton = document.querySelector(selector);
           if (tweetButton) {
