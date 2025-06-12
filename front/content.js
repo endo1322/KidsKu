@@ -168,14 +168,14 @@ async function hookButton(selector) {
         }
 
         const data = await response.json();
-        const res = data.response
 
         // 判定の結果（safe, warning, danger）
-        const level = res.level;
+        const level = data.level;
+        // 判断理由
+        const reason = data.reason;
+        const res = data.response
         // 訂正文
         const corrected_text = res.corrected_text;
-        // 判断理由
-        const reason = res.reason;
         // 投稿文におけるアドバイス
         const suggestion = res.suggestion;
 
