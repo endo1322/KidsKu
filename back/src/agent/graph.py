@@ -4,7 +4,6 @@ Returns a predefined response. Replace logic and configuration as needed.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict
 
@@ -23,14 +22,6 @@ class SafetyLevel(str, Enum):
 
 class SafetyCheckResult(BaseModel):
     """SNS投稿の安全性チェック結果を表すモデル。."""
-    level: SafetyLevel = Field(
-        ...,
-        description="投稿内容の安全性レベル（safe: 安全, warning: 注意, danger: 危険）"
-    )
-    reason: str = Field(
-        ...,
-        description="安全性レベルを判定した理由の詳細な説明"
-    )
     suggestion: str = Field(
         ...,
         description="投稿内容を改善するための具体的な提案"
@@ -40,8 +31,7 @@ class SafetyCheckResult(BaseModel):
         description="安全性を考慮して修正した投稿内容"
     )
 
-@dataclass
-class State:
+class State(BaseModel):
     """Input state for the agent.
 
     Defines the initial structure of incoming data.
@@ -49,13 +39,22 @@ class State:
     """
 
     user_request: str = Field(..., description="ユーザーからのSNS投稿内容")
-    response: SafetyCheckResult = Field(default=None, description="AIからの安全性チェック結果")
+    level: SafetyLevel = Field(default=SafetyLevel.SAFE, description="投稿内容の安全性レベル（safe: 安全, warning: 注意, danger: 危険）")
+    reason: str = Field(default="", description="安全性評価の理由")
+    response: SafetyCheckResult = Field(default_factory=lambda: SafetyCheckResult(
+        suggestion="",
+        corrected_text=""
+    ), description="AIからの訂正文の出力結果")
 
+
+class SafetyAssessment(BaseModel):  # noqa: D101
+    level: SafetyLevel
+    reason: str
 
 def analyze_post_safety(state: State, llm: ChatOpenAI) -> Dict[str, Any]:
-    """Process input and returns output.
-
-    Can use runtime configuration to alter behavior.
+    """Analyze the safety level of the SNS post.
+    
+    Returns the safety level (safe/warning/danger) and the reason for the assessment.
     """
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -69,9 +68,7 @@ def analyze_post_safety(state: State, llm: ChatOpenAI) -> Dict[str, Any]:
                 "評価結果は以下のJSON形式で返してください：\n"
                 "{{\n"
                 '    "level": "safe/warning/danger",\n'
-                '    "reason": "判定理由の詳細な説明",\n'
-                '    "suggestion": "改善提案",\n'
-                '    "corrected_text": "安全性を考慮して修正した投稿内容"\n'
+                '    "reason": "判定理由の詳細な説明"\n'
                 "}}",
             ),
             (
@@ -80,13 +77,60 @@ def analyze_post_safety(state: State, llm: ChatOpenAI) -> Dict[str, Any]:
             ),
         ]
     )
-    model = llm.with_structured_output(SafetyCheckResult)
+    model = llm.with_structured_output(SafetyAssessment)
     chain = prompt | model
-    result: SafetyCheckResult = chain.invoke({"user_request": state.user_request})
+    result: SafetyAssessment = chain.invoke({"user_request": state.user_request})
     
     return {
         "user_request": state.user_request,
-        "response": result
+        "level": result.level,
+        "reason": result.reason
+    }
+
+
+class CorrectionResult(BaseModel):  # noqa: D101
+    suggestion: str
+    corrected_text: str
+
+def generate_corrected_text(state: State, llm: ChatOpenAI) -> Dict[str, Any]:
+    """Generate a corrected version of the SNS post based on the safety assessment.
+    
+    Returns suggestions for improvement and a corrected version of the text.
+    """
+    prompt = ChatPromptTemplate.from_messages([
+        (
+            "system",
+            "あなたはSNS投稿の改善提案を行う専門家です。\n"
+            "以下の情報を元に、投稿内容を改善する提案と修正版を作成してください：\n"
+            "- 元の投稿内容\n"
+            "- 安全性評価の結果と理由\n\n"
+            "評価結果は以下のJSON形式で返してください：\n"
+            "{{\n"
+            '    "suggestion": "改善提案の詳細な説明",\n'
+            '    "corrected_text": "安全性を考慮して修正した投稿内容"\n'
+            "}}"
+        ),
+        (
+            "human",
+            "投稿内容: {user_request}\n"
+            "安全性評価: {level}\n"
+            "評価理由: {reason}"
+        ),
+    ])
+    
+    model = llm.with_structured_output(CorrectionResult)
+    chain = prompt | model
+    result: CorrectionResult = chain.invoke({
+        "user_request": state.user_request,
+        "level": state.level,
+        "reason": state.reason
+    })
+    
+    return {
+        "response": SafetyCheckResult(
+            suggestion=result.suggestion,
+            corrected_text=result.corrected_text
+        )
     }
 
 load_dotenv()
@@ -97,7 +141,11 @@ llm = ChatOpenAI(model="gpt-4o", temperature=0.0)
 graph = (
     StateGraph(State)
     .add_node("analyze_post_safety", lambda state: analyze_post_safety(state, llm))
+    .add_node("generate_corrected_text", lambda state: generate_corrected_text(state, llm))
     .add_edge("__start__", "analyze_post_safety")
-    .add_edge("analyze_post_safety", END)
+    .add_conditional_edges("analyze_post_safety",
+                           lambda state: state.level == 'safe',
+                           {True: END, False: "generate_corrected_text"})
+    .add_edge("generate_corrected_text", END)
     .compile(name="MoveBits")
 )
