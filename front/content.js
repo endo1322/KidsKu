@@ -350,8 +350,9 @@ async function hookButton(selector) {
 
           const tweetButton = document.querySelector(selector);
           if (tweetButton) {
-            // 訂正案があれば反映
-            editor.innerText = corrected_text || text;
+            // ここで挿入された文章から変更できなくなるため一旦見逃します。
+            // // 訂正案があれば反映
+            // editor.innerText = corrected_text || text;
             // synthetic click（プログラム発行）
             tweetButton.click();
           } else {
