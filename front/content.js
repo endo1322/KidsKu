@@ -57,10 +57,24 @@ async function hookButton(selector) {
         }
 
         const data = await response.json();
-        console.log('Response data:', data);
+        const res = data.response
 
-        // レスポンスに基づいてポップアップを表示
-        showPopup(text + " リスクのある内容です。投稿を見直してください。");
+        // 判定の結果（safe, warning, danger）
+        const level = res.level;
+        // 訂正文
+        const corrected_text = res.corrected_text;
+        // 判断理由
+        const reason = res.reason;
+        // 投稿文におけるアドバイス
+        const suggestion = res.suggestion;
+
+        // TODO:levelがwarning, dangerで表示されるpopupのスタイルが分岐できるようにする
+        if (level != 'safe') {
+          // TODO:訂正案を別のpopupで表示できるようにする
+          showPopup("リスクのある内容です。投稿を見直してください。\n訂正案："+ corrected_text);
+        } else {
+          // TODO:安全な場合は本来の投稿処理を続行
+        }
       } catch (error) {
         console.error('Error:', error);
         showPopup("エラーが発生しました。もう一度お試しください。");

@@ -1,7 +1,8 @@
 // 環境変数の設定
 const config = {
   API_URL: "http://127.0.0.1:2024",
-  ASSISTANT_ID: "c1ee8685-d317-4085-9bc9-11643e1e1df0"
+  // バックエンド起動のたび変更してください
+  ASSISTANT_ID: "df58dbc4-98ec-489a-a650-d1a120093703"
 };
 
 // 設定をストレージに保存
