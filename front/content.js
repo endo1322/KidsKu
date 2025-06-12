@@ -31,7 +31,7 @@ function showPopup(message, type = "safe") {
 
   const div = document.createElement("div");
   div.className = "popup-toast";
-  div.style.pointerEvents = "auto"; 
+  div.style.pointerEvents = "auto";
 
   const text = document.createElement("span");
   text.textContent = message;
@@ -282,107 +282,102 @@ function resolveLoadingPopup(popup, message, status = "success") {
 }
 
 
-/*
-  button click時の処理
-*/
-async function hookButton(selector) {
-  const existing = document.querySelector(selector);
-  if (!existing) {
-    return;
+const hookConfigs = [
+  // X (旧Twitter) 用
+  {
+    platform: "x",
+    buttonSelector: '[data-testid="tweetButton"]',
+    textareaSelector: '[data-testid="tweetTextarea_0"]'
+  },
+  {
+    platform: "x",
+    buttonSelector: '[data-testid="tweetButtonInline"]',
+    textareaSelector: '[data-testid="tweetTextarea_0"]'
+  },
+  // YouTube のコメント投稿用
+  {
+    platform: "youtube",
+    buttonSelector: 'button[aria-label="コメント"]',
+    textareaSelector: 'div#contenteditable-root[contenteditable="true"]'
+  },
+  {
+    platform: "youtube",
+    buttonSelector: 'button[aria-label="返信"]',
+    textareaSelector: 'div#contenteditable-root[contenteditable="true"]'
+  },
+  {
+    platform: "youtube",
+    buttonSelector: '#submit-button',
+    textareaSelector: 'div#contenteditable-root[contenteditable="true"]'
   }
-  const { threadId, config } = await chrome.storage.local.get(["threadId", "config"]);
-  if (existing && !existing.dataset.hooked) {
-    existing.dataset.hooked = "true";
+];
 
-    existing.addEventListener("click", async (e) => {
-      // synthetic（プログラム発行）クリックは無視
-      if (!e.isTrusted) {
-        return;
+
+async function hookButton({ platform, buttonSelector, textareaSelector }) {
+  const btn = document.querySelector(buttonSelector);
+  if (!btn || btn.dataset.hooked) return;
+  btn.dataset.hooked = "true";
+
+  btn.addEventListener("click", async (e) => {
+    if (!e.isTrusted) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+
+    let editor;
+    // プラットフォームごとに「コメント入力欄を探す」ロジックを切り替え
+    if (platform === "youtube") {
+      const formRoot = btn.closest("ytd-commentbox, ytd-comment-dialog-renderer");
+      editor = formRoot
+        ? formRoot.querySelector(textareaSelector)
+        : document.querySelector(textareaSelector);
+    } else {
+      // X 用（従来どおり）
+      editor = document.querySelector(textareaSelector);
+    }
+
+    const text = editor?.innerText.trim() || "";
+    const popup = showLoadingPopup("AIが内容をチェックするね…");
+
+    try {
+      const { threadId, config } = await chrome.storage.local.get([
+        "threadId",
+        "config",
+      ]);
+      const res = await fetch(`${config.API_URL}/threads/${threadId}/runs/wait`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assistant_id: config.ASSISTANT_ID,
+          input: { user_request: text },
+        }),
+      });
+      if (!res.ok) throw new Error(res.statusText);
+      const data = await res.json();
+      popup.remove();
+
+      // --- 以下、既存のレベル判定・投稿ロジック ---
+      const { level, response } = data;
+      if (level === "danger") {
+        showPopup("この投稿、あとで後悔しないかな？\nいったん落ち着いて考えてみよう", level);
+      } else if (level === "warning") {
+        showPopup("この投稿、本当に大丈夫かな？\nこう直すともっとよくなるかも!", level);
+      } else {
+        showPopup("いい内容だね！投稿するね！", level);
+        // 本来のクリックを再発行
+        btn.click();
       }
-
-      // 本物のユーザークリック時のみキャンセルして検査
-      e.preventDefault();
-      e.stopImmediatePropagation();
-
-      const editor = document.querySelector('[data-testid="tweetTextarea_0"]');
-      const text = editor?.innerText || "";
-      
-      const popup = showLoadingPopup("AIが内容をチェックするね...");
-      try {
-        const response = await fetch(`${config.API_URL}/threads/${threadId}/runs/wait`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            assistant_id: config.ASSISTANT_ID,
-            input: { user_request: text }
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`Server responded with status: ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        // 判定の結果（safe, warning, danger）
-        const level = data.level;
-        // 判断理由
-        const reason = data.reason;
-        const res = data?.response
-        // 訂正文
-        const corrected_text = res?.corrected_text;
-        // 投稿文におけるアドバイス
-        const suggestion = res?.suggestion;
-
-        popup.remove(); //ポップアップの削除
-        if (level === 'warning') {
-          showPopup(
-            `この投稿、本当に大丈夫かな？\nこう直すともっとよくなるかも!`,
-            level
-          );
-          showPopup(
-            `訂正文: ${corrected_text}`, "safe"
-          );
-        } else if (level === 'danger') {
-          showPopup(
-            `この投稿、あとで後悔しないかな？\nいったん落ち着いて考えてみよう`,
-            level
-          );
-        } else {
-          showPopup("いい内容だね！投稿するね！", level);
-
-          const tweetButton = document.querySelector(selector);
-          if (tweetButton) {
-            // ここで挿入された文章から変更できなくなるため一旦見逃します。
-            // // 訂正案があれば反映
-            // editor.innerText = corrected_text || text;
-            // synthetic click（プログラム発行）
-            tweetButton.click();
-          } else {
-            console.error("Tweet button not found.");
-          }
-        }
-      } catch (error) {
-        console.error('Error:', error);
-        resolveLoadingPopup(popup, "エラーが発生しました", "fail");
-      }
-    }, true); // capture モード
-  }
+    } catch (err) {
+      resolveLoadingPopup(popup, "エラーが発生しました", "fail");
+      console.error(err);
+    }
+  }, true);
 }
 
-// observerを起動して監視する
 function observeButtons() {
   const observer = new MutationObserver(() => {
-    hookButton('[data-testid="tweetButton"]');
-    hookButton('[data-testid="tweetButtonInline"]');
+    hookConfigs.forEach(cfg => hookButton(cfg));
   });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-  });
+  observer.observe(document.body, { childList: true, subtree: true });
 }
 
 observeButtons();
