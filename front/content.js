@@ -2,7 +2,6 @@
 /*
     warning/alertのスタイル設定
 */
-let toggle = true;
 
 
 function showPopup(message, type = "safe") {
