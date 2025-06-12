@@ -1,9 +1,6 @@
-
 /*
     warning/alertのスタイル設定
 */
-
-
 function showPopup(message, type = "safe") {
   const div = document.createElement("div");
   div.className = "popup-toast";
@@ -45,7 +42,7 @@ function showPopup(message, type = "safe") {
   }
 
   Object.assign(div.style, {
-    maxWidth: "400px", 
+    maxWidth: "400px",
     width: "fit-content",
     wordBreak: "break-word",
     whiteSpace: "pre-wrap",
@@ -131,7 +128,6 @@ function showPopup(message, type = "safe") {
   }
 }
 
-
 async function hookButton(selector) {
   const existing = document.querySelector(selector);
   if (!existing) {
@@ -142,7 +138,12 @@ async function hookButton(selector) {
     existing.dataset.hooked = "true";
 
     existing.addEventListener("click", async (e) => {
-      // 先にデフォルト動作をキャンセル
+      // synthetic（プログラム発行）クリックは無視
+      if (!e.isTrusted) {
+        return;
+      }
+
+      // 本物のユーザークリック時のみキャンセルして検査
       e.preventDefault();
       e.stopImmediatePropagation();
 
@@ -157,9 +158,7 @@ async function hookButton(selector) {
           },
           body: JSON.stringify({
             assistant_id: config.ASSISTANT_ID,
-            input: {
-              user_request: text
-            }
+            input: { user_request: text }
           })
         });
 
@@ -168,34 +167,35 @@ async function hookButton(selector) {
         }
 
         const data = await response.json();
-        const res = data.response
+        const { level, corrected_text, reason, suggestion } = data.response;
 
-        // 判定の結果（safe, warning, danger）
-        const level = res.level;
-        // 訂正文
-        const corrected_text = res.corrected_text;
-        // 判断理由
-        const reason = res.reason;
-        // 投稿文におけるアドバイス
-        const suggestion = res.suggestion;
-
-        // TODO:levelがwarning, dangerで表示されるpopupのスタイルが分岐できるようにする
-        if (level != 'safe') {
-          // TODO:訂正案を別のpopupで表示できるようにする
-          showPopup("リスクのある内容です。投稿を見直してください。\n訂正案："+ corrected_text, level);
+        if (level !== 'safe') {
+          showPopup(
+            `リスクのある内容です。投稿を見直してください。\n訂正案：${corrected_text}`,
+            level
+          );
         } else {
-          // TODO:安全な場合は本来の投稿処理を続行
+          showPopup("安全な内容です。投稿を続行します。", level);
+
+          const tweetButton = document.querySelector('[data-testid="tweetButton"]');
+          if (tweetButton) {
+            // 訂正案があれば反映
+            editor.innerText = corrected_text || text;
+            // synthetic click（プログラム発行）
+            tweetButton.click();
+          } else {
+            console.error("Tweet button not found.");
+          }
         }
       } catch (error) {
         console.error('Error:', error);
         showPopup("エラーが発生しました。もう一度お試しください。");
       }
-    }, true);
+    }, true); // capture モード
   }
 }
 
 // observerを起動して監視する
-// 読み込まれるタイミングがバラバラのため
 function observeButtons() {
   const observer = new MutationObserver(() => {
     hookButton('[data-testid="tweetButton"]');
@@ -206,7 +206,6 @@ function observeButtons() {
     childList: true,
     subtree: true,
   });
-
 }
 
 observeButtons();
