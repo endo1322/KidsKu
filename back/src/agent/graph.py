@@ -34,7 +34,11 @@ class SafetyCheckResult(BaseModel):
     suggestion: str = Field(
         ...,
         description="投稿内容を改善するための具体的な提案"
-    ) 
+    )
+    corrected_text: str = Field(
+        ...,
+        description="安全性を考慮して修正した投稿内容"
+    )
 
 @dataclass
 class State:
@@ -48,7 +52,7 @@ class State:
     response: SafetyCheckResult = Field(default=None, description="AIからの安全性チェック結果")
 
 
-def call_model(state: State, llm: ChatOpenAI) -> Dict[str, Any]:
+def analyze_post_safety(state: State, llm: ChatOpenAI) -> Dict[str, Any]:
     """Process input and returns output.
 
     Can use runtime configuration to alter behavior.
@@ -66,7 +70,8 @@ def call_model(state: State, llm: ChatOpenAI) -> Dict[str, Any]:
                 "{{\n"
                 '    "level": "safe/warning/danger",\n'
                 '    "reason": "判定理由の詳細な説明",\n'
-                '    "suggestion": "改善提案"\n'
+                '    "suggestion": "改善提案",\n'
+                '    "corrected_text": "安全性を考慮して修正した投稿内容"\n'
                 "}}",
             ),
             (
@@ -91,8 +96,8 @@ llm = ChatOpenAI(model="gpt-4o", temperature=0.0)
 # Define the graph
 graph = (
     StateGraph(State)
-    .add_node("call_model", lambda state: call_model(state, llm))
-    .add_edge("__start__", "call_model")
-    .add_edge("call_model", END)
-    .compile(name="New Graph")
+    .add_node("analyze_post_safety", lambda state: analyze_post_safety(state, llm))
+    .add_edge("__start__", "analyze_post_safety")
+    .add_edge("analyze_post_safety", END)
+    .compile(name="MoveBits")
 )
