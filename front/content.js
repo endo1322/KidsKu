@@ -21,21 +21,50 @@ function showPopup(message) {
 }
 
 
-function hookButton(selector) {
+async function hookButton(selector) {
   const existing = document.querySelector(selector);
   if (!existing) {
     return;
   }
+  const { threadId } = await chrome.storage.local.get("threadId");
   if (existing && !existing.dataset.hooked) {
     existing.dataset.hooked = "true";
 
     existing.addEventListener("click", async (e) => {
-    const editor = document.querySelector('[data-testid="tweetTextarea_0"]');
-    const text = editor?.innerText || "";
+      // 先にデフォルト動作をキャンセル
+      e.preventDefault();
+      e.stopImmediatePropagation();
 
-      e.preventDefault(); // デフォルト動作のキャンセル
-      e.stopImmediatePropagation(); // 他のイベントリスナーを実行させない
-      showPopup(text + " リスクのある内容です。投稿を見直してください。");
+      const editor = document.querySelector('[data-testid="tweetTextarea_0"]');
+      const text = editor?.innerText || "";
+
+      try {
+        const response = await fetch(`http://127.0.0.1:2024/threads/${threadId}/runs/wait`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            assistant_id: "c1ee8685-d317-4085-9bc9-11643e1e1df0",
+            input: {
+              user_request: text
+            }
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Server responded with status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('Response data:', data);
+
+        // レスポンスに基づいてポップアップを表示
+        showPopup(text + " リスクのある内容です。投稿を見直してください。");
+      } catch (error) {
+        console.error('Error:', error);
+        showPopup("エラーが発生しました。もう一度お試しください。");
+      }
     }, true);
   }
 }
