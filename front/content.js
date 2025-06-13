@@ -339,7 +339,7 @@ async function hookButton(selector) {
         popup.remove(); //ポップアップの削除
         if (level === 'warning') {
           showPopup(
-            `この投稿、本当に大丈夫かな？\nこう直すともっとよくなるかも!`,
+            reason,
             level
           );
           showPopup(
@@ -347,7 +347,7 @@ async function hookButton(selector) {
           );
         } else if (level === 'danger') {
           showPopup(
-            `この投稿、あとで後悔しないかな？\nいったん落ち着いて考えてみよう`,
+            reason,
             level
           );
         } else {
